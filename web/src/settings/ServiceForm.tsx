@@ -4,15 +4,17 @@ import { ServiceIcon } from '../components/ServiceIcon.tsx';
 import { Field, Switch, describedBy } from './fields.tsx';
 import { IconPicker } from './IconPicker.tsx';
 
+/** The drawer footer submits this form from outside via the `form` attribute. */
+export const SERVICE_FORM_ID = 'service-form';
+
 interface Props {
   service: Service;
   groups: Group[];
   isNew: boolean;
   onSave: (service: Service) => void;
-  onCancel: () => void;
 }
 
-export function ServiceForm({ service, groups, isNew, onSave, onCancel }: Props) {
+export function ServiceForm({ service, groups, isNew, onSave }: Props) {
   const [form, setForm] = useState<Service>(service);
   const [submitted, setSubmitted] = useState(false);
   const id = useId();
@@ -23,7 +25,10 @@ export function ServiceForm({ service, groups, isNew, onSave, onCancel }: Props)
     event.preventDefault();
     setSubmitted(true);
     const problems = validateServiceInput(form);
-    if (Object.keys(problems).length > 0) return;
+    if (Object.keys(problems).length > 0) {
+      document.querySelector<HTMLElement>(`#${CSS.escape(id)}-${Object.keys(problems)[0]}`)?.focus();
+      return;
+    }
     onSave({
       ...form,
       name: form.name.trim(),
@@ -34,7 +39,7 @@ export function ServiceForm({ service, groups, isNew, onSave, onCancel }: Props)
   };
 
   return (
-    <form onSubmit={submit} noValidate>
+    <form id={SERVICE_FORM_ID} onSubmit={submit} noValidate>
       <div className="form-header">
         <h3>{isNew ? 'Add service' : 'Edit service'}</h3>
       </div>
@@ -122,15 +127,6 @@ export function ServiceForm({ service, groups, isNew, onSave, onCancel }: Props)
 
       <Switch label="Enabled" hint="Disabled services stay configured but are hidden." checked={form.enabled} onChange={(enabled) => update({ enabled })} />
       <Switch label="Open in a new tab" checked={form.openInNewTab} onChange={(openInNewTab) => update({ openInNewTab })} />
-
-      <div className="form-actions">
-        <button type="button" className="btn" onClick={onCancel}>
-          Cancel
-        </button>
-        <button type="submit" className="btn btn-primary">
-          {isNew ? 'Add service' : 'Apply'}
-        </button>
-      </div>
     </form>
   );
 }

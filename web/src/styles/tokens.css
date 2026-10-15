@@ -17,6 +17,7 @@
   --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
 
   --danger: #e8806f;
+  --danger-contrast: #1a0f0d;
   --danger-soft: color-mix(in srgb, var(--danger) 14%, transparent);
   --success: #9fd97a;
 
@@ -53,5 +54,6 @@
   --accent-soft: color-mix(in srgb, var(--accent) 22%, transparent);
 
   --danger: #c4452e;
+  --danger-contrast: #ffffff;
   --shadow-lg: 0 24px 64px rgba(20, 30, 15, 0.18);
 }

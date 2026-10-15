@@ -8,9 +8,10 @@ import {
   type DashboardSettings,
   type Theme,
 } from '@nest/shared';
-import { useId } from 'react';
+import { useId, useState } from 'react';
 import { RotateCcw } from '../icons.ts';
 import { Field, Switch, describedBy } from './fields.tsx';
+import { InlineConfirm } from './InlineConfirm.tsx';
 
 interface Props {
   dashboard: DashboardSettings;
@@ -23,6 +24,7 @@ const THEME_LABELS: Record<Theme, string> = { dark: 'Dark', light: 'Light', syst
 
 export function GeneralTab({ dashboard, onChange, onReset, resetting }: Props) {
   const id = useId();
+  const [confirmReset, setConfirmReset] = useState(false);
   const errors = validateDashboardInput(dashboard);
   const bgFallback = dashboard.theme === 'light' ? '#f4f5f1' : '#101310';
 
@@ -205,9 +207,28 @@ export function GeneralTab({ dashboard, onChange, onReset, resetting }: Props) {
 
       <div className="danger-zone">
         <p>Reset everything to the defaults NEST ships with. This removes all services and groups and is saved immediately.</p>
-        <button type="button" className="btn btn-danger" style={{ borderColor: 'var(--border-strong)' }} onClick={onReset} disabled={resetting}>
-          <RotateCcw size={15} aria-hidden="true" /> {resetting ? 'Resetting…' : 'Reset to defaults'}
-        </button>
+        {confirmReset ? (
+          <InlineConfirm
+            message="Replace everything with the defaults?"
+            detail="All services, groups and settings are overwritten and saved right away."
+            confirmLabel="Reset"
+            onCancel={() => setConfirmReset(false)}
+            onConfirm={() => {
+              setConfirmReset(false);
+              onReset();
+            }}
+          />
+        ) : (
+          <button
+            type="button"
+            className="btn btn-danger"
+            style={{ borderColor: 'var(--border-strong)' }}
+            onClick={() => setConfirmReset(true)}
+            disabled={resetting}
+          >
+            <RotateCcw size={15} aria-hidden="true" /> {resetting ? 'Resetting…' : 'Reset to defaults'}
+          </button>
+        )}
       </div>
     </div>
   );

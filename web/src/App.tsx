@@ -57,6 +57,8 @@ export function App() {
   const [draft, setDraft] = useState<NestConfig | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [confirmReplace, setConfirmReplace] = useState(false);
+  const [replaceError, setReplaceError] = useState<string | null>(null);
   const prefersDark = usePrefersDark();
   const searchRef = useRef<HTMLInputElement>(null);
   const settingsButtonRef = useRef<HTMLButtonElement>(null);
@@ -141,10 +143,10 @@ export function App() {
   const resetToDefaults = () => persist(createDefaultConfig());
 
   const replaceInvalidConfig = async () => {
-    if (!window.confirm('Replace the unreadable configuration file with the defaults? The old file is kept as a backup.')) return;
+    setConfirmReplace(false);
     const result = await persist(createDefaultConfig());
     if (result.ok) setLoad({ status: 'ready' });
-    else window.alert(result.message);
+    else setReplaceError(result.message);
   };
 
   if (load.status === 'loading') {
@@ -162,16 +164,28 @@ export function App() {
       <StatusScreen
         title="Configuration could not be read"
         message="NEST refused to start with this configuration and left the file untouched. Fix it by hand, or replace it with the defaults."
-        detail={load.message}
+        detail={replaceError ? `${load.message}\n\n${replaceError}` : load.message}
         actions={
-          <>
-            <button type="button" className="btn btn-primary" onClick={() => void loadConfig()}>
-              Reload
-            </button>
-            <button type="button" className="btn" onClick={() => void replaceInvalidConfig()}>
-              Replace with defaults
-            </button>
-          </>
+          confirmReplace ? (
+            <>
+              <span className="status-note">The old file is kept as a backup.</span>
+              <button type="button" className="btn" autoFocus onClick={() => setConfirmReplace(false)}>
+                Cancel
+              </button>
+              <button type="button" className="btn btn-danger-solid" onClick={() => void replaceInvalidConfig()}>
+                Yes, replace
+              </button>
+            </>
+          ) : (
+            <>
+              <button type="button" className="btn btn-primary" onClick={() => void loadConfig()}>
+                Reload
+              </button>
+              <button type="button" className="btn" onClick={() => setConfirmReplace(true)}>
+                Replace with defaults
+              </button>
+            </>
+          )
         }
       />
     );
