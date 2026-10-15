@@ -269,6 +269,39 @@
   color: var(--text-muted);
 }
 
+/* ---- Inline confirmations ------------------------------------------- */
+
+.confirm {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  min-height: var(--touch);
+  padding: 8px 10px;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  background: var(--danger-soft);
+}
+
+.confirm .item-text {
+  flex: 1 1 180px;
+}
+
+.confirm .item-meta {
+  white-space: normal;
+}
+
+li.confirm + li,
+li + li.confirm {
+  margin-top: 6px;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
 /* ---- Service form --------------------------------------------------- */
 
 .form-header {
@@ -281,13 +314,6 @@
 .form-header h3 {
   font-size: 15px;
   font-weight: 600;
-}
-
-.form-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 8px;
 }
 
 .icon-current {

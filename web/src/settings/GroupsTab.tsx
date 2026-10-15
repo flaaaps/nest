@@ -2,6 +2,7 @@ import { LIMITS, generateId, validateGroupName, type Group, type NestConfig } fr
 import { useId, useState, type FormEvent } from 'react';
 import { ChevronDown, ChevronUp, Plus, Trash } from '../icons.ts';
 import { moveItem, removeGroup } from '../lib/dashboard.ts';
+import { InlineConfirm } from './InlineConfirm.tsx';
 
 interface Props {
   config: NestConfig;
@@ -11,6 +12,7 @@ interface Props {
 export function GroupsTab({ config, onChange }: Props) {
   const [newName, setNewName] = useState('');
   const [newError, setNewError] = useState<string | undefined>();
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const id = useId();
   const atLimit = config.groups.length >= LIMITS.maxGroups;
 
@@ -28,12 +30,8 @@ export function GroupsTab({ config, onChange }: Props) {
     setNewError(undefined);
   };
 
-  const remove = (group: Group) => {
-    const count = config.services.filter((s) => s.groupId === group.id).length;
-    const note = count > 0 ? ` ${count} ${count === 1 ? 'service' : 'services'} will move to “Other”.` : '';
-    if (!window.confirm(`Delete group “${group.name}”?${note}`)) return;
-    onChange(removeGroup(config, group.id));
-  };
+  const deleteDetail = (count: number) =>
+    count > 0 ? `${count} ${count === 1 ? 'service moves' : 'services move'} to “Other”. Takes effect when you save.` : 'Takes effect when you save.';
 
   return (
     <div>
@@ -48,6 +46,22 @@ export function GroupsTab({ config, onChange }: Props) {
           {config.groups.map((group, index) => {
             const error = validateGroupName(group.name);
             const count = config.services.filter((s) => s.groupId === group.id).length;
+            if (confirmDeleteId === group.id) {
+              return (
+                <InlineConfirm
+                  key={group.id}
+                  as="li"
+                  message={`Delete group “${group.name}”?`}
+                  detail={deleteDetail(count)}
+                  confirmLabel="Delete"
+                  onCancel={() => setConfirmDeleteId(null)}
+                  onConfirm={() => {
+                    onChange(removeGroup(config, group.id));
+                    setConfirmDeleteId(null);
+                  }}
+                />
+              );
+            }
             return (
               <li key={group.id} className="item">
                 <span className="item-text">
@@ -95,7 +109,7 @@ export function GroupsTab({ config, onChange }: Props) {
                     type="button"
                     className="btn btn-danger btn-icon btn-sm"
                     aria-label={`Delete ${group.name}`}
-                    onClick={() => remove(group)}
+                    onClick={() => setConfirmDeleteId(group.id)}
                   >
                     <Trash size={15} aria-hidden="true" />
                   </button>

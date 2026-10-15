@@ -411,6 +411,12 @@
   margin-top: 16px;
 }
 
+.status-note {
+  flex-basis: 100%;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
 .status-loading {
   color: var(--text-faint);
   font-size: 13px;

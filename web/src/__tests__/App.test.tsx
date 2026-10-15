@@ -1,7 +1,7 @@
 import { createDefaultConfig, type NestConfig } from '@nest/shared';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../App.tsx';
 
 type FetchMock = ReturnType<typeof vi.fn>;
@@ -37,10 +37,6 @@ function putBodies(fetchMock: FetchMock): NestConfig[] {
     .filter(([, init]) => (init as RequestInit | undefined)?.method === 'PUT')
     .map(([, init]) => JSON.parse(String((init as RequestInit).body)) as NestConfig);
 }
-
-beforeEach(() => {
-  vi.spyOn(window, 'confirm').mockReturnValue(true);
-});
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -119,6 +115,8 @@ describe('error handling', () => {
     expect(screen.getByText(/is not valid JSON/)).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /replace with defaults/i }));
+    expect(putBodies(fetchMock)).toHaveLength(0);
+    await user.click(screen.getByRole('button', { name: /yes, replace/i }));
     expect(await screen.findByRole('link', { name: /grafana/i })).toBeInTheDocument();
     expect(putBodies(fetchMock)).toEqual([createDefaultConfig()]);
   });
@@ -269,8 +267,15 @@ describe('settings', () => {
     expect(screen.queryByRole('link', { name: /metrics/i })).not.toBeInTheDocument();
 
     await user.click(within(dialog).getByRole('button', { name: 'Move Metrics up' }));
+
+    // Deleting asks inline first; cancelling keeps the service.
     await user.click(within(dialog).getByRole('button', { name: 'Delete Pi-hole' }));
-    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('Pi-hole'));
+    expect(within(dialog).getByText('Delete “Pi-hole”?')).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(within(dialog).getByText('Pi-hole')).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Delete Pi-hole' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    expect(within(dialog).queryByText('Pi-hole')).not.toBeInTheDocument();
 
     await user.click(within(dialog).getByRole('button', { name: /save changes/i }));
     await within(dialog).findByText('Saved.');
@@ -295,7 +300,8 @@ describe('settings', () => {
     await user.clear(inputs[0]!);
     await user.type(inputs[0]!, 'Home');
     await user.click(within(dialog).getByRole('button', { name: 'Delete Monitoring' }));
-    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('2 services will move'));
+    expect(within(dialog).getByText(/2 services move to/)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Delete' }));
 
     await user.click(within(dialog).getByRole('button', { name: /save changes/i }));
     await within(dialog).findByText('Saved.');
@@ -340,17 +346,66 @@ describe('settings', () => {
     const dialog = screen.getByRole('dialog');
 
     await user.type(within(dialog).getByLabelText('Subtitle'), '!');
-    vi.mocked(window.confirm).mockReturnValueOnce(false);
     await user.click(within(dialog).getByRole('button', { name: /close settings/i }));
+    expect(within(dialog).getByText('Discard unsaved changes?')).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: /keep editing/i }));
     expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(within(dialog).getByLabelText('Subtitle')).toHaveValue('Your homelab, at a glance.!');
 
-    vi.mocked(window.confirm).mockReturnValueOnce(false);
     await user.click(within(dialog).getByRole('button', { name: /reset to defaults/i }));
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
     expect(putBodies(fetchMock)).toHaveLength(0);
 
     await user.click(within(dialog).getByRole('button', { name: /reset to defaults/i }));
+    await user.click(within(dialog).getByRole('button', { name: 'Reset' }));
     expect(await within(dialog).findByText('Defaults restored.')).toBeInTheDocument();
     expect(putBodies(fetchMock)).toEqual([createDefaultConfig()]);
     expect(screen.getByText('NEST', { selector: '.brand-name' })).toBeInTheDocument();
+  });
+
+  it('keeps the form actions in the footer while editing a service', async () => {
+    mockApi();
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await screen.findByRole('button', { name: /open settings/i }));
+    const dialog = screen.getByRole('dialog');
+    await user.click(within(dialog).getByRole('tab', { name: 'Services' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Edit Glances' }));
+
+    const footer = dialog.querySelector('.drawer-footer') as HTMLElement;
+    expect(within(footer).getByRole('button', { name: 'Apply' })).toBeInTheDocument();
+    expect(within(footer).getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: /save changes/i })).not.toBeInTheDocument();
+
+    await user.click(within(footer).getByRole('button', { name: 'Cancel' }));
+    expect(within(dialog).getByRole('button', { name: 'Edit Glances' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: /save changes/i })).toBeInTheDocument();
+  });
+
+  it('closes when the backdrop is clicked, asking first if there are unsaved changes', async () => {
+    mockApi();
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await screen.findByRole('button', { name: /open settings/i }));
+    const dialog = screen.getByRole('dialog');
+
+    // Clicks inside the panel never close it.
+    fireEvent.pointerDown(within(dialog).getByRole('heading', { name: 'Settings' }));
+    fireEvent.click(within(dialog).getByRole('heading', { name: 'Settings' }));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    await user.type(within(dialog).getByLabelText('Title'), '!');
+    fireEvent.pointerDown(dialog);
+    fireEvent.click(dialog);
+    expect(within(dialog).getByText('Discard unsaved changes?')).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Discard' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(screen.getByText('NEST', { selector: '.brand-name' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /open settings/i }));
+    const reopened = screen.getByRole('dialog');
+    fireEvent.pointerDown(reopened);
+    fireEvent.click(reopened);
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 });

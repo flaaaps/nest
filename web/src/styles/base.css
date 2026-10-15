@@ -138,6 +138,16 @@ button {
   background: var(--danger-soft);
 }
 
+.btn-danger-solid {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: var(--danger-contrast);
+}
+
+.btn-danger-solid:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 85%, black);
+}
+
 .btn-sm {
   height: 30px;
   padding: 0 8px;
