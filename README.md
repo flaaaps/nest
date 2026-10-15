@@ -280,6 +280,26 @@ a reverse proxy if the network is not fully trusted.
 Note that custom icon URLs and the background image URL are loaded by *your browser*,
 so they can point at an internet host, but NEST itself never makes outbound requests.
 
+## Remote access
+
+NEST has no remote-access feature of its own on purpose. Many home connections
+(DS-Lite / carrier-grade NAT) cannot receive inbound traffic at all, and exposing admin
+tools such as Portainer or Pi-hole to the internet is risky. The recommended way to
+reach the dashboard and your services from outside is a VPN such as
+[Tailscale](https://tailscale.com):
+
+1. Install Tailscale on the Pi and on your phone or laptop.
+2. Start the Pi as a *subnet router* for your LAN, for example
+   `sudo tailscale up --advertise-routes=192.168.188.0/24`, and approve the route once
+   in the Tailscale admin console.
+3. Use IP addresses or your router's DNS names (`http://host.fritz.box:8123` on a
+   FRITZ!Box) in the service URLs rather than `.local` names, which only resolve on the
+   local network. With Tailscale *split DNS* pointing your router's domain at the
+   router's IP, those names work from anywhere.
+
+With that in place every URL on the dashboard works unchanged from outside, and nothing
+is exposed to the public internet.
+
 ## Running without Docker
 
 Requires Node.js 22+ and pnpm (via `corepack enable`).
