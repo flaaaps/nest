@@ -42,8 +42,9 @@ accounts. A beautiful, lightweight home for your services. Nothing more, nothing
 ## Prerequisites
 
 - A Raspberry Pi (3, 4, 5 or similar) running a 64-bit or 32-bit (armv7) Linux with
-  Docker and the Docker Compose plugin installed. Any other Linux/amd64 host works too.
-  Pi Zero / Pi 1 (armv6) are not supported by the official Node.js images.
+  Docker and the Docker Compose plugin, or Podman with `podman-compose`, installed.
+  Any other Linux/amd64 host works too. Pi Zero / Pi 1 (armv6) are not supported by
+  the official Node.js images.
 - About 150 MB of disk space for the image and a few KB for the configuration.
 
 Running without Docker is also possible with Node.js 22 or newer (see
@@ -52,42 +53,59 @@ Running without Docker is also possible with Node.js 22 or newer (see
 ## Installation with Docker Compose
 
 ```bash
-git clone https://github.com/<you>/nest.git
+git clone https://github.com/flaaaps/nest.git
 cd nest
 docker compose up -d --build
 ```
 
+With Podman, use `podman-compose up -d --build` instead; everything else is identical.
+
 The first build compiles the UI on the Pi and takes a few minutes. When it finishes, open
 
 ```
-http://raspberrypi.local:8080
+http://raspberrypi.local
 ```
 
 from any device on your network. Replace `raspberrypi.local` with your Pi's hostname or
 IP address (`hostname -I` on the Pi shows it). If `.local` names do not resolve on your
 device, use the IP address.
 
+NEST is published on port 80 of the host by default, so no port is needed in the URL.
+
 On first start NEST writes a default configuration with a few example services
 (Home Assistant, Node-RED, Glances, Grafana, Portainer, Pi-hole). **These are examples
 only.** The hostnames, ports and paths must be adapted to your environment. Edit or
 delete them through the settings panel (gear icon, top right).
 
-### Changing the port
+### Choosing the port
 
-Create a `.env` file next to `docker-compose.yml` (see `.env.example`):
+To use another host port, create a `.env` file next to `docker-compose.yml` (see
+`.env.example`):
 
 ```
 NEST_PORT=3001
 ```
 
-then run `docker compose up -d`. The container always listens on 8080 internally; only
-the host-side port changes.
+then run `docker compose up -d` (or `podman-compose up -d`). The container always
+listens on 8080 internally; only the host-side port changes.
+
+**Ports below 1024 with rootless Podman or Docker.** Linux reserves ports below 1024
+for root. Rootless containers therefore fail to publish port 80 with
+`bind: permission denied` or `rootlessport ... bind` errors. Allow it once on the Pi:
+
+```bash
+sudo sysctl -w net.ipv4.ip_unprivileged_port_start=80
+echo 'net.ipv4.ip_unprivileged_port_start=80' | sudo tee /etc/sysctl.d/90-nest-port80.conf
+```
+
+The second line keeps the setting across reboots. Alternatively run the stack as root
+(`sudo docker compose up -d`), or pick a port of 1024 or above.
 
 ## Configuration and environment variables
 
 | Variable             | Default (Docker)       | Description                                                                 |
 | -------------------- | ---------------------- | --------------------------------------------------------------------------- |
-| `NEST_PORT`          | `8080`                 | Port the server listens on. In Compose this is the host port mapping.       |
+| `NEST_PORT`          | `80` (host, Compose) / `8080` (server) | In Compose: the host port NEST is published on. For the server itself: the port it listens on. |
 | `NEST_HOST`          | `0.0.0.0` (`127.0.0.1` outside Docker) | Interface to bind to.                                      |
 | `NEST_CONFIG_DIR`    | `/data`                | Directory holding `config.json` (mounted as a volume).                       |
 | `NEST_STATIC_DIR`    | `/app/web/dist`        | Directory with the built web UI.                                            |
@@ -203,9 +221,9 @@ The configuration can also be fetched from and pushed to the API from the same m
 (or any client on the LAN, see [Security](#security)):
 
 ```bash
-curl http://raspberrypi.local:8080/api/config > backup.json
+curl http://raspberrypi.local/api/config > backup.json
 curl -X PUT -H 'Content-Type: application/json' --data-binary @backup.json \
-  http://raspberrypi.local:8080/api/config
+  http://raspberrypi.local/api/config
 ```
 
 ## Updating
@@ -272,6 +290,9 @@ pnpm build                       # builds web/dist and server/dist
 NEST_PORT=8080 NEST_HOST=0.0.0.0 NEST_CONFIG_DIR=/var/lib/nest pnpm start
 ```
 
+Binding port 80 directly requires root or the sysctl described in
+[Choosing the port](#choosing-the-port).
+
 For development, `pnpm dev` starts the API on `127.0.0.1:8080` (configuration in
 `./data`) and the Vite dev server with hot reload on `http://127.0.0.1:5173`.
 
@@ -279,14 +300,16 @@ For development, `pnpm dev` starts the API on `127.0.0.1:8080` (configuration in
 
 | Symptom | What to check |
 | --- | --- |
-| Page does not load | `docker compose ps` shows the container running and healthy; `docker compose logs nest` for errors; the port is not used by another service (`ss -ltnp \| grep 8080`). |
+| Page does not load | `docker compose ps` shows the container running and healthy; `docker compose logs nest` for errors. |
+| `bind: address already in use` on start | Another service already uses the host port. Find it with `ss -ltnp \| grep ':80 '` and either stop it or set a different `NEST_PORT` in `.env`. |
+| `bind: permission denied` / `rootlessport` error on start | Rootless containers cannot use ports below 1024 by default. See [Choosing the port](#choosing-the-port). |
 | "NEST is not reachable" in the browser | The server process died or a reverse proxy is misconfigured. Check the logs. |
 | "Configuration could not be read" | `config.json` is malformed. Fix it by hand (the error names the problem) or click *Replace with defaults*; the broken file is kept. |
 | Changes are not saved | A 403 means the request was treated as cross-site (e.g. the dashboard is embedded or proxied under a different host). A 400 shows the validation error in the panel. |
 | Custom icon does not show | The URL must be reachable *from the browser* and served with an image content type. NEST falls back to the built-in icon. |
 | A service card opens nothing | NEST only links to the URL; the target service itself must be running and reachable from your device. |
 | Hostname `raspberrypi.local` does not resolve | Use the Pi's IP address or configure your DNS/Pi-hole with a local record. |
-| Permission denied writing `/data` | With a bind mount, `chown 1000:1000` the folder (container uid). |
+| Permission denied writing `/data` | With a bind mount, `chown 1000:1000` the folder (container uid); with rootless Podman use `podman unshare chown 1000:1000 data`. |
 
 ## Project layout
 
